@@ -67,8 +67,13 @@ function NetworkerServer.new(networkTag: NetworkTag, module: {}?, clientAccess: 
 	self.func = func
 
 	if typeof(networkTag) == "Instance" then
-		local newTag = HttpService:GenerateGUID(false):sub(1, 13)
 		local instance = networkTag :: Instance
+		assert(
+			instance:GetAttribute(NetworkerUtils.INSTANCE_ATTRIBUTE) == nil,
+			"NetworkerServer instance already has a networkTag attribute"
+		)
+
+		local newTag = HttpService:GenerateGUID(false):sub(1, 13)
 		self.instance = instance
 		self.networkTag = newTag
 		instance:SetAttribute(NetworkerUtils.INSTANCE_ATTRIBUTE, newTag)
@@ -79,6 +84,7 @@ function NetworkerServer.new(networkTag: NetworkTag, module: {}?, clientAccess: 
 	end
 
 	remotes.Name = self.networkTag :: string
+	assert(RemoteContainter:FindFirstChild(remotes.Name) == nil, "NetworkerServer with the same name already exists")
 	remotes.Parent = RemoteContainter
 
 	if not clientAccess then
@@ -258,9 +264,12 @@ end
 function NetworkerServer.destroy(self: NetworkerServer): ()
 	self.remotes:Destroy()
 	self:clearRecipients()
-	self.instance = nil
 	if self.instanceConn then
 		self.instanceConn:Disconnect()
+	end
+	if self.instance then
+		self.instance:SetAttribute(NetworkerUtils.INSTANCE_ATTRIBUTE, nil)
+		self.instance = nil
 	end
 end
 
