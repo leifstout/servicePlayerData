@@ -1,11 +1,14 @@
 [package]
-name = "leifs/neworker"
+name = "leifstout/networker"
 description = "A replacement for RemoteEvents"
 version = "0.1.0"
 license = "MIT"
 authors = ["Leif Stout <leifstout@gmail.com>"]
 registry = "https://github.com/UpliftGames/wally-index"
 realm = "shared"
+
+exclude = ["**"]
+include = ["src", "src/*", "default.project.json", "wally.lock", "wally.toml", "LICENSE"]
 
 [dependencies]
 Signal = "stravant/goodsignal@0.3.0"

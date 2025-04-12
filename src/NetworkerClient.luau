@@ -2,7 +2,7 @@
 local RunService = game:GetService("RunService")
 
 local Packages = script.Parent.Parent
-local Signal: any = {} -- require(Packages.Signal)
+local Signal = require(Packages.Signal)
 local NetworkerUtils = require(script.Parent.NetworkerUtils)
 
 local NetworkServiceContainer = if RunService:IsRunning()

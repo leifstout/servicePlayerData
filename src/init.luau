@@ -1,5 +1,5 @@
 local server = require(script.NetworkerServer)
-local client = require(script.NeworkerClient)
+local client = require(script.NetworkerClient)
 
 return {
 	server = server,

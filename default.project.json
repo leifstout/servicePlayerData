@@ -1,6 +1,6 @@
 {
-  "name": "neworker",
+  "name": "networker",
   "tree": {
-		"$path": "src"
-	}
+    "$path": "src"
+  }
 }
