@@ -1,16 +1,22 @@
 --[=[
 	@type ClientAccess { (any) -> any }  
-	@within NetworkServiceServer  
+	@within NetworkerServer  
 ]=]
 export type ClientAccess = { (any) -> any }
 
 --[=[
 	@type NetworkTag string | Instance  
-	@within NetworkServiceServer  
+	@within NetworkerServer  
 ]=]
 export type NetworkTag = string | Instance
 
+export type RemotesContainer = Folder & {
+	RemoteEvent: RemoteEvent,
+	RemoteFunction: RemoteFunction,
+}
+
 return {
 	SET_TAG = "__set",
-	INSTANCE_TAG = "__instance_networker",
+	INSTANCE_ATTRIBUTE = "__networkTag",
+	INSTANCE_TAG = "__instance",
 }

@@ -1,22 +1,20 @@
 --!strict
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
 local NetworkerUtils = require(script.Parent.NetworkerUtils)
 
---[[if RunService:IsClient() then
-	return nil
-end]]
-
-local NetworkServiceContainer = nil
+local RemoteContainter: Folder
 if RunService:IsRunning() and RunService:IsServer() then
-	NetworkServiceContainer = Instance.new("Folder")
-	NetworkServiceContainer.Name = "_NetworkServiceContainer"
-	NetworkServiceContainer.Parent = script.Parent
+	RemoteContainter = Instance.new("Folder")
+	RemoteContainter.Name = "_remotes"
+	RemoteContainter.Parent = script.Parent
 end
 
 type NetworkTag = NetworkerUtils.NetworkTag
 type ClientAccess = NetworkerUtils.ClientAccess
+type RemotesContainer = NetworkerUtils.RemotesContainer
 
 --[=[
 	NetworkerServer facilitates the communication of server-sided networking and handles client networking requests  
@@ -34,7 +32,10 @@ type PlayerGroup = Player | { Player }
 export type NetworkerServer = typeof(setmetatable(
 	{} :: {
 		networkTag: NetworkTag,
-		remote: RemoteEvent,
+		event: RemoteEvent,
+		func: RemoteFunction,
+		remotes: RemotesContainer,
+		instance: Instance?,
 		instanceConn: RBXScriptConnection?,
 		recipients: { Player }?,
 	},
@@ -49,25 +50,36 @@ export type NetworkerServer = typeof(setmetatable(
 	@return NetworkerServer  
 ]=]
 function NetworkerServer.new(networkTag: NetworkTag, module: {}?, clientAccess: ClientAccess?): NetworkerServer
-	local self = {
+	assert(RunService:IsServer(), "NetworkerServer can only be created on the server")
+
+	local self = setmetatable({
 		networkTag = networkTag,
-	}
+	}, NetworkerServer)
 
-	local remote = Instance.new("RemoteEvent")
-	self.remote = remote
+	local remotes = Instance.new("Folder")
+	local event = Instance.new("RemoteEvent")
+	local func = Instance.new("RemoteFunction")
+	event.Parent = remotes
+	func.Parent = remotes
 
-	setmetatable(self, NetworkerServer)
+	self.remotes = remotes :: RemotesContainer
+	self.event = event
+	self.func = func
 
 	if typeof(networkTag) == "Instance" then
-		remote.Name = NetworkerUtils.INSTANCE_TAG
-		remote.Parent = networkTag
-		self.instanceConn = networkTag.Destroying:Once(function()
+		local newTag = HttpService:GenerateGUID(false):sub(1, 13)
+		local instance = networkTag :: Instance
+		self.instance = instance
+		self.networkTag = newTag
+		instance:SetAttribute(NetworkerUtils.INSTANCE_ATTRIBUTE, newTag)
+
+		self.instanceConn = instance.Destroying:Once(function()
 			self:destroy()
-		end) :: RBXScriptConnection
-	else
-		remote.Name = networkTag
-		remote.Parent = NetworkServiceContainer
+		end)
 	end
+
+	remotes.Name = self.networkTag :: string
+	remotes.Parent = RemoteContainter
 
 	if not clientAccess then
 		return self
@@ -75,21 +87,24 @@ function NetworkerServer.new(networkTag: NetworkTag, module: {}?, clientAccess: 
 
 	assert(module, "Module must be provided when clientAccess is set")
 
-	remote.OnServerEvent:Connect(function(player: Player, method: string, ...: any?)
-		local func = module[method]
+	local function callback(player: Player, method: string, ...: any?): any?
+		local moduleFunc = module[method]
 
-		if not func then
+		if not moduleFunc then
 			warn("Method " .. method .. " does not exist on module", networkTag)
 			return
 		end
 
-		if not table.find(clientAccess, func) then
+		if not table.find(clientAccess, moduleFunc) then
 			warn(player.Name .. " attempted to call restricted method " .. method .. " on service", networkTag)
 			return
 		end
 
-		func(module, player, ...)
-	end)
+		return moduleFunc(module, player, ...)
+	end
+
+	event.OnServerEvent:Connect(callback)
+	func.OnServerInvoke = callback
 
 	return self
 end
@@ -141,12 +156,12 @@ end
 ]=]
 function NetworkerServer.fire(self: NetworkerServer, players: PlayerGroup, method: string, ...: any?): ()
 	if typeof(players) == "Instance" then
-		self.remote:FireClient(players, method, ...)
+		self.event:FireClient(players, method, ...)
 		return
 	end
 
 	for _, player in players :: { Player } do
-		self.remote:FireClient(player, method, ...)
+		self.event:FireClient(player, method, ...)
 	end
 end
 
@@ -157,7 +172,7 @@ end
 	@return ()  
 ]=]
 function NetworkerServer.fireAll(self: NetworkerServer, method: string, ...: any?): ()
-	self.remote:FireAllClients(method, ...)
+	self.event:FireAllClients(method, ...)
 end
 
 --[=[
@@ -174,7 +189,7 @@ function NetworkerServer.fireAllExcept(self: NetworkerServer, players: PlayerGro
 
 	for _, player in Players:GetPlayers() do
 		if not table.find(players :: { Player }, player) then
-			self.remote:FireClient(player, method, ...)
+			self.event:FireClient(player, method, ...)
 		end
 	end
 end
@@ -236,16 +251,14 @@ function NetworkerServer.setRecipients(self: NetworkerServer, index: string, val
 	self:fireRecipients(NetworkerUtils.SET_TAG, index, value)
 end
 
-function NetworkerServer.destroying(_self: NetworkerServer): () end
-
 --[=[
 	Destroys the NetworkerServer  
 	@return ()  
 ]=]
 function NetworkerServer.destroy(self: NetworkerServer): ()
-	self:destroying()
-	self.remote:Destroy()
+	self.remotes:Destroy()
 	self:clearRecipients()
+	self.instance = nil
 	if self.instanceConn then
 		self.instanceConn:Disconnect()
 	end

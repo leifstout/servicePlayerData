@@ -5,11 +5,8 @@ local Packages = script.Parent.Parent
 local Signal = require(Packages.Signal)
 local NetworkerUtils = require(script.Parent.NetworkerUtils)
 
-local NetworkServiceContainer = if RunService:IsRunning()
-	then script.Parent:WaitForChild("_NetworkServiceContainer") :: Folder
-	else nil :: any
-
 type NetworkTag = NetworkerUtils.NetworkTag
+type RemotesContainer = NetworkerUtils.RemotesContainer
 
 --[=[
 	NetworkerClient facilitates the communication of client-sided networking and handles server networking instructions  
@@ -21,7 +18,7 @@ NetworkerClient.__index = NetworkerClient
 export type NetworkerClient = typeof(setmetatable(
 	{} :: {
 		networkTag: NetworkTag,
-		remote: RemoteEvent,
+		remotes: RemotesContainer,
 		instanceConn: RBXScriptConnection?,
 		changedSignals: { [string]: Signal.Signal<any> },
 	},
@@ -35,32 +32,38 @@ export type NetworkerClient = typeof(setmetatable(
 	@return NetworkerClient  
 ]=]
 function NetworkerClient.new(networkTag: NetworkTag, module: {}): NetworkerClient
+	assert(RunService:IsClient(), "NetworkerClient can only be created on the client")
+
 	local self = {
 		networkTag = networkTag,
 		changedSignals = {},
 	}
 
-	local strName
-
 	setmetatable(self, NetworkerClient)
 
 	if not RunService:IsRunning() then
-		self.remote = nil :: any
-		return self
+		return self :: any
 	end
 
 	if typeof(networkTag) == "Instance" then
-		self.remote = networkTag:WaitForChild(NetworkerUtils.INSTANCE_TAG) :: RemoteEvent
-		strName = networkTag:GetFullName()
-		self.instanceConn = networkTag.Destroying:Once(function()
-			self:destroy()
-		end) :: RBXScriptConnection
-	else
-		self.remote = NetworkServiceContainer:WaitForChild(networkTag) :: RemoteEvent
-		strName = networkTag
+		local attributeTag = networkTag:GetAttribute(NetworkerUtils.INSTANCE_ATTRIBUTE) :: string?
+		if not attributeTag then
+			networkTag:GetAttributeChangedSignal(NetworkerUtils.INSTANCE_ATTRIBUTE):Wait()
+			attributeTag = networkTag:GetAttribute(NetworkerUtils.INSTANCE_ATTRIBUTE) :: string?
+		end
+
+		assert(attributeTag, "NetworkerClient instance does not have a networkTag attribute")
+		self.networkTag = attributeTag
 	end
 
-	self.remote.OnClientEvent:Connect(function(method: string, key: string, ...: any?)
+	local remotes = script.Parent:WaitForChild("_remotes"):WaitForChild(self.networkTag) :: RemotesContainer
+	self.remotes = remotes
+
+	remotes.Destroying:Once(function()
+		self:destroy()
+	end)
+
+	remotes.RemoteEvent.OnClientEvent:Connect(function(method: string, key: string, ...: any?)
 		if method == NetworkerUtils.SET_TAG then
 			module[key] = ...
 			if self.changedSignals[key] then
@@ -69,7 +72,7 @@ function NetworkerClient.new(networkTag: NetworkTag, module: {}): NetworkerClien
 			return
 		end
 
-		assert(module[method], "Method " .. method .. " does not exist on networkTag " .. strName)
+		assert(module[method], "Method " .. method .. " does not exist on networkTag " .. remotes.Name)
 		module[method](module, key, ...)
 	end)
 
@@ -90,15 +93,30 @@ function NetworkerClient.getServerChangedSignal<T>(self: NetworkerClient, key: s
 end
 
 --[=[
-	Requests a method on the server.  
+	calls a method on the server.  
 	@param method string -- The method to fire  
 	@param ... any -- The arguments to pass to the method  
 	@return ()  
 ]=]
 function NetworkerClient.fire(self: NetworkerClient, method: string, ...: any?): ()
 	if RunService:IsRunning() then
-		self.remote:FireServer(method, ...)
+		self.remotes.RemoteEvent:FireServer(method, ...)
 	end
+end
+
+--[=[
+	calls a method on the server, and returns its result. 
+	@param method string -- The method to fire  
+	@param ... any -- The arguments to pass to the method  
+	@return any? -- The result of the method
+	@yields
+]=]
+function NetworkerClient.fetch(self: NetworkerClient, method: string, ...: any): any?
+	if not RunService:IsRunning() then
+		return nil
+	end
+
+	return self.remotes.RemoteFunction:InvokeServer(method, ...)
 end
 
 --[=[
@@ -106,8 +124,8 @@ end
 	@return ()  
 ]=]
 function NetworkerClient.destroy(self: NetworkerClient): ()
-	if self.remote then
-		self.remote:Destroy()
+	if self.remotes then
+		self.remotes:Destroy()
 	end
 	for _, signal in self.changedSignals do
 		signal:Destroy()
