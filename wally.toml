@@ -1,5 +1,5 @@
 [package]
-name = "leifstout/networker"
+name = "leifstout/servicePlayerData"
 description = "Non-persistent service player data"
 version = "0.1.0"
 license = "MIT"
