@@ -3,9 +3,14 @@
 registry = "test"
 
 [[package]]
-name = "leifstout/networker"
+name = "csqrl/sift"
+version = "0.0.11"
+dependencies = []
+
+[[package]]
+name = "leifstout/serviceplayerdata"
 version = "0.1.0"
-dependencies = [["Signal", "sleitnick/signal@2.0.3"]]
+dependencies = [["Sift", "csqrl/sift@0.0.11"], ["Signal", "sleitnick/signal@2.0.3"]]
 
 [[package]]
 name = "sleitnick/signal"

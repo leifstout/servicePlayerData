@@ -1,6 +1,6 @@
 local Players = game:GetService("Players")
 
-local Packages = script.Parent.Parent
+local Packages = script.Parent
 local Sift = require(Packages.Sift)
 local Signal = require(Packages.Signal)
 
