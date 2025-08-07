@@ -37,12 +37,12 @@ function SerivcePlayerData.new<T>(dataTemplate: T, service: any?): ServicePlayer
 
 	local function removePlayer(player: Player)
 		local playerData = servicePlayerData[player]
+		if service and service.playerRemoving then
+			service:playerRemoving(player, playerData)
+		end
 		if playerData then
 			servicePlayerData[player] = nil
 			self.onPlayerRemoving:Fire(player, playerData)
-		end
-		if service and service.playerRemoving then
-			service:playerRemoving(player, playerData)
 		end
 	end
 
